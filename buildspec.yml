@@ -1,0 +1,37 @@
+version: 0.2
+
+env:
+  variables:
+    BRANCH: "main"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+      nodejs: 20
+    commands:
+      - echo "Install phase"
+      - python --version
+      - node --version
+      - npm --version
+      - aws --version
+      - pip install --upgrade pip
+      - pip install aws-sam-cli
+  pre_build:
+    commands:
+      - echo "Pre-build phase"
+      - test -n "$REPO_URL" || (echo "REPO_URL env var required"; exit 1)
+      - echo "Repo: $REPO_URL"
+      - echo "Branch: ${BRANCH}"
+  build:
+    commands:
+      - echo "Build phase"
+      - python deploy_handler.py <<'PY'
+PY
+  post_build:
+    commands:
+      - echo "Post-build phase"
+
+artifacts:
+  files:
+    - '**/*'

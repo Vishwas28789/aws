@@ -2,3 +2,5 @@
 workshop/themes/*
 /.idea/
 /aws-serverless-cicd-workshop.iml
+.aws-sam/
+*.log

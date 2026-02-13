@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Universal GitHub auto-deployer (best-effort)
+
+Parameters:
+  RepoUrl:
+    Type: String
+  Branch:
+    Type: String
+    Default: main
+
+Resources:
+  UniversalDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: universal-deployer-minimal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketWebsite
+                  - s3:PutBucketCors
+                  - s3:PutEncryptionConfiguration
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - cloudfront:CreateDistribution
+                  - cloudfront:GetDistribution
+                  - cloudfront:GetDistributionConfig
+                  - cloudfront:UpdateDistribution
+                  - cloudfront:CreateInvalidation
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:PublishVersion
+                  - lambda:CreateAlias
+                  - lambda:UpdateAlias
+                  - lambda:AddPermission
+                  - lambda:GetFunction
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:AttachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:PassRole
+                  - iam:GetRole
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  UniversalDeployFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: deploy_handler.lambda_handler
+      Runtime: python3.12
+      MemorySize: 1024
+      Timeout: 900
+      Role: !GetAtt UniversalDeployRole.Arn
+      Environment:
+        Variables:
+          REPO_URL: !Ref RepoUrl
+          REPO_BRANCH: !Ref Branch
+      Events:
+        DeployApi:
+          Type: Api
+          Properties:
+            Path: /deploy
+            Method: post
+
+Outputs:
+  DeploymentStatusApi:
+    Description: API endpoint to trigger deployment
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/deploy"
+  DeploymentLambdaArn:
+    Description: Universal deployer Lambda ARN
+    Value: !GetAtt UniversalDeployFunction.Arn
