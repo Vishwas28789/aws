@@ -1,6 +1,13 @@
+.aws-sam/
+*.log
+ud_persistence.db
+test_classify.py
+classify_output.txt
+test_out.txt
+test_deployments.py
+sam_fail.txt
+universal-sam-*.log
 .DS_Store
 workshop/themes/*
 /.idea/
 /aws-serverless-cicd-workshop.iml
-.aws-sam/
-*.log

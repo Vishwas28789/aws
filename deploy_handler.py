@@ -109,18 +109,20 @@ def _build_frontend(root: str, framework: str) -> str | None:
         return None
 
     # npm install
-    rc, out = _run(["npm", "ci"], cwd=root)
-    if rc != 0:
-        rc, out2 = _run(["npm", "install"], cwd=root)
-        out += "\n" + out2
-        if rc != 0:
-            raise RuntimeError("npm install failed:\n" + out)
+    try:
+        subprocess.run("npm ci", shell=True, check=True, cwd=root, capture_output=True, text=True)
+    except subprocess.CalledProcessError:
+        try:
+            subprocess.run("npm install", shell=True, check=True, cwd=root, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError("npm install failed:\n" + str(e.stderr or e.stdout))
 
-    rc, out = _run(["npm", "run", "build"], cwd=root)
-    if rc != 0:
-        raise RuntimeError("npm run build failed:\n" + out)
+    try:
+        subprocess.run("npm run build", shell=True, check=True, cwd=root, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("npm run build failed:\n" + str(e.stderr or e.stdout))
 
-    for cand in ("build", "dist"):
+    for cand in ("build", "dist", "out"):
         p = os.path.join(root, cand)
         if os.path.isdir(p):
             return p
