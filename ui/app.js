@@ -6,7 +6,7 @@
     "use strict";
 
     // ── Configuration ──────────────────────────────────────────────
-    const API_BASE = window.DEPLOYER_API_BASE || "http://localhost:8000";
+    const API_BASE = ""; // Use relative paths (works locally and on Render)
 
     // ── DOM refs ───────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
