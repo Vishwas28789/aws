@@ -369,7 +369,8 @@ def run_local(port: int = 8000) -> None:
     """Start a local dev server on *port*."""
     server = _ThreadingHTTPServer(("", port), _LocalHandler)
     print(f"🚀 Universal Deployer running at http://localhost:{port}")
-    print(f"   Dashboard:    http://localhost:{port}/")
+    print(f"   Dashboard URL: http://localhost:{port}/")
+    print(f"   Serving UI from: {os.path.abspath(_UI_DIR)}")
     print(f"   Health check: http://localhost:{port}/health")
     print("   Press Ctrl+C to stop.\n")
     try:

@@ -1,5 +1,5 @@
 /* =================================================================
-   Universal Deployer — Dashboard Application Logic
+   Universal Deployer — Dashboard Application Logic (v1.0.1)
    ================================================================= */
 
 (() => {
