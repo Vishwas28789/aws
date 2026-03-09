@@ -72,15 +72,16 @@ def _log(deploy_id: str, message: str) -> None:
 
 def _build_node(deploy_id: str, root: str) -> str | None:
     """Install deps and build a Node project.  Returns the build output dir."""
-    # Optimization: Use memory-saving flags for npm install
-    npm_cmd = "npm install --no-package-lock --no-audit --no-fund --prefer-offline"
+    # Optimization: Use memory-saving flags for npm install and avoid buffering logs in RAM
+    npm_cmd = "npm install --no-package-lock --no-audit --no-fund --prefer-offline --no-progress"
     try:
-        subprocess.run("npm ci", shell=True, check=True, cwd=root, capture_output=True, text=True)
+        # We don't use capture_output=True here to avoid buffering potentially MBs of logs in RAM
+        subprocess.run("npm ci", shell=True, check=True, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError:
         try:
-            subprocess.run(npm_cmd, shell=True, check=True, cwd=root, capture_output=True, text=True)
+            subprocess.run(npm_cmd, shell=True, check=True, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"npm install failed:\n{e.stderr or e.stdout}")
+            raise RuntimeError(f"npm install failed (check local logs for details)")
 
     import json
     has_build_script = False
@@ -94,13 +95,14 @@ def _build_node(deploy_id: str, root: str) -> str | None:
 
     if has_build_script:
         _log(deploy_id, "Running build")
-        # Optimization: Limit memory for Node.js build process
+        # Optimization: Limit memory for Node.js build process (more aggressive for Render)
         env = os.environ.copy()
-        env["NODE_OPTIONS"] = "--max-old-space-size=400"
+        env["NODE_OPTIONS"] = "--max-old-space-size=300"
         try:
-            subprocess.run("npm run build", shell=True, check=True, cwd=root, capture_output=True, text=True, env=env)
+            # Avoid buffering logs in memory
+            subprocess.run("npm run build", shell=True, check=True, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, env=env)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"npm run build failed:\n{e.stderr or e.stdout}")
+            raise RuntimeError(f"npm run build failed (check local logs for details)")
         _log(deploy_id, "Build completed")
     else:
         _log(deploy_id, "No build script found, skipping build")

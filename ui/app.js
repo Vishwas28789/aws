@@ -105,10 +105,26 @@
         };
         if (body) opts.body = JSON.stringify(body);
 
-        const res = await fetch(`${API_BASE}${path}`, opts);
-        const data = JSON.parse(await res.text());
-        if (res.status >= 400) throw new Error(data.error || "API error");
-        return data;
+        try {
+            const res = await fetch(`${API_BASE}${path}`, opts);
+            const text = await res.text();
+
+            if (!text && res.status >= 400) {
+                throw new Error(`Server returned error ${res.status}`);
+            }
+
+            try {
+                const data = JSON.parse(text || "{}");
+                if (res.status >= 400) throw new Error(data.error || "API error");
+                return data;
+            } catch (jsonErr) {
+                console.error("JSON Parse Error:", jsonErr, "Body:", text);
+                throw new Error("Invalid response from server (possible timeout or crash)");
+            }
+        } catch (err) {
+            console.error("API Call failed:", err);
+            throw err;
+        }
     }
 
     // ── Health check ───────────────────────────────────────────────
