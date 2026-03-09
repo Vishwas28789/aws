@@ -310,7 +310,8 @@
                     refreshHistory();
                 }
             } catch (err) {
-                console.error("Polling error:", err);
+                // Silently ignore polling errors (handles server restarts/OOM recovery)
+                console.warn("Polling retry...", err);
             }
         }, 3000);
     }
