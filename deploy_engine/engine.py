@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -71,12 +72,13 @@ def _log(deploy_id: str, message: str) -> None:
 
 def _build_node(deploy_id: str, root: str) -> str | None:
     """Install deps and build a Node project.  Returns the build output dir."""
-    _log(deploy_id, "Installing dependencies")
+    # Optimization: Use memory-saving flags for npm install
+    npm_cmd = "npm install --no-package-lock --no-audit --no-fund --prefer-offline"
     try:
         subprocess.run("npm ci", shell=True, check=True, cwd=root, capture_output=True, text=True)
     except subprocess.CalledProcessError:
         try:
-            subprocess.run("npm install", shell=True, check=True, cwd=root, capture_output=True, text=True)
+            subprocess.run(npm_cmd, shell=True, check=True, cwd=root, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"npm install failed:\n{e.stderr or e.stdout}")
 
@@ -92,8 +94,11 @@ def _build_node(deploy_id: str, root: str) -> str | None:
 
     if has_build_script:
         _log(deploy_id, "Running build")
+        # Optimization: Limit memory for Node.js build process
+        env = os.environ.copy()
+        env["NODE_OPTIONS"] = "--max-old-space-size=400"
         try:
-            subprocess.run("npm run build", shell=True, check=True, cwd=root, capture_output=True, text=True)
+            subprocess.run("npm run build", shell=True, check=True, cwd=root, capture_output=True, text=True, env=env)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"npm run build failed:\n{e.stderr or e.stdout}")
         _log(deploy_id, "Build completed")
@@ -172,35 +177,40 @@ class DeployEngine:
         }
         persistence.save_deployment(dep)
 
-        # Create session from strictly provided credentials
-        try:
-            self._session = self._get_session(aws_credentials)
-        except ValueError as exc:
-            _log(deploy_id, f"❌ DEPLOYMENT FAILED: {exc}")
-            dep = persistence.get_deployment(deploy_id) or dep
-            dep["status"] = "failed"
-            dep["error"] = str(exc)
-            persistence.save_deployment(dep)
-            return dep
-
-        if aws_credentials and aws_credentials.get("region"):
-            self.region = aws_credentials["region"]
-
-        _log(deploy_id, "Using AWS account credentials")
-        _log(deploy_id, f"Region selected: {self.region}")
-        _log(deploy_id, "Creating resources in specified account")
-
-        try:
-            self._execute(deploy_id, repo_url, branch, target, extra_context or {})
-        except Exception as exc:
-            _log(deploy_id, f"❌ DEPLOYMENT FAILED: {exc}")
-            # Refresh record to preserve metadata/outputs
-            dep = persistence.get_deployment(deploy_id) or dep
-            dep["status"] = "failed"
-            dep["error"] = str(exc)
-            persistence.save_deployment(dep)
+        # 2. Start deployment in a background thread
+        thread = threading.Thread(
+            target=self._run_async,
+            args=(deploy_id, repo_url, branch, target, extra_context or {}, aws_credentials)
+        )
+        thread.daemon = True
+        thread.start()
 
         return persistence.get_deployment(deploy_id)
+
+    def _run_async(
+        self,
+        deploy_id: str,
+        repo_url: str,
+        branch: str,
+        target: str,
+        ctx: dict,
+        aws_credentials: dict | None
+    ) -> None:
+        """Background worker for deployment."""
+        try:
+            # Re-create session in the thread
+            self._session = self._get_session(aws_credentials)
+            if aws_credentials and aws_credentials.get("region"):
+                self.region = aws_credentials["region"]
+
+            self._execute(deploy_id, repo_url, branch, target, ctx)
+        except Exception as exc:
+            _log(deploy_id, f"❌ DEPLOYMENT FAILED: {exc}")
+            dep = persistence.get_deployment(deploy_id)
+            if dep:
+                dep["status"] = "failed"
+                dep["error"] = str(exc)
+                persistence.save_deployment(dep)
 
     @staticmethod
     def get_deployment(deploy_id: str) -> dict | None:

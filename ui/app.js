@@ -44,6 +44,8 @@
     let currentAnalysis = null;
     let currentArch = null;
     let selectedTarget = null;
+    let pollInterval = null;
+    const displayedLogs = new Set();
 
     // ── Helpers ────────────────────────────────────────────────────
     function getAwsCredentials() {
@@ -266,9 +268,10 @@
             }
             payload.aws_credentials = creds;
 
-            const result = await api("POST", "/deploy", payload);
+            const dep = await api("POST", "/deploy", payload);
 
-            renderDeployResult(result);
+            // Start polling for updates
+            startPolling(dep.id);
             refreshHistory();
         } catch (err) {
             appendLog(`❌ ${err.message}`, "error");
@@ -276,9 +279,32 @@
         }
     });
 
+    function startPolling(deployId) {
+        if (pollInterval) clearInterval(pollInterval);
+        displayedLogs.clear();
+
+        pollInterval = setInterval(async () => {
+            try {
+                const dep = await api("GET", `/deployment-status/${deployId}`);
+                renderDeployResult(dep);
+
+                if (dep.status === "success" || dep.status === "failed") {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    refreshHistory();
+                }
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }, 3000);
+    }
+
     function renderDeployResult(dep) {
-        // Logs
+        // Logs with deduplication
         (dep.logs || []).forEach(line => {
+            if (displayedLogs.has(line)) return;
+            displayedLogs.add(line);
+
             let cls = "info";
             if (line.includes("✅")) cls = "ok";
             else if (line.includes("❌") || line.includes("FAILED")) cls = "error";
