@@ -299,18 +299,24 @@
         if (pollInterval) clearInterval(pollInterval);
         displayedLogs.clear();
 
+        let lastStatus = ""; // Initialize lastStatus
         pollInterval = setInterval(async () => {
             try {
                 const dep = await api("GET", `/deployment-status/${deployId}`);
+
+                // If status changed since last poll, refresh the history table below
+                if (dep.status !== lastStatus) {
+                    refreshHistory();
+                    lastStatus = dep.status;
+                }
+
                 renderDeployResult(dep);
 
                 if (dep.status === "success" || dep.status === "failed") {
                     clearInterval(pollInterval);
                     pollInterval = null;
-                    refreshHistory();
                 }
             } catch (err) {
-                // Silently ignore polling errors (handles server restarts/OOM recovery)
                 console.warn("Polling retry...", err);
             }
         }, 3000);

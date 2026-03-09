@@ -72,6 +72,9 @@ def _log(deploy_id: str, message: str) -> None:
 
 def _build_node(deploy_id: str, root: str) -> str | None:
     """Install deps and build a Node project.  Returns the build output dir."""
+    _log(deploy_id, "📦 Installing dependencies (npm install)...")
+    _log(deploy_id, "⚠️ Note: This can take 3-5 minutes on Render Free tier. Please wait...")
+    
     # Optimization: Extremely restricted memory for Render Free tier (512MB RAM total)
     # npm flags: --no-progress to reduce CPU/RAM spikes, --no-package-lock to avoid disk I/O
     npm_cmd = "npm install --no-package-lock --no-audit --no-fund --prefer-offline --no-progress"
@@ -83,6 +86,8 @@ def _build_node(deploy_id: str, root: str) -> str | None:
             subprocess.run(npm_cmd, shell=True, check=True, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError:
             raise RuntimeError("npm install failed due to memory or environment constraints")
+    
+    _log(deploy_id, "✅ Dependencies installed")
 
     import json
     has_build_script = False
@@ -95,7 +100,8 @@ def _build_node(deploy_id: str, root: str) -> str | None:
             pass
 
     if has_build_script:
-        _log(deploy_id, "Running build")
+        _log(deploy_id, "🔨 Running build script (npm run build)...")
+        _log(deploy_id, "ℹ️ Still building... large projects may take extra time.")
         # Optimization: Limit memory to 256MB for the Node process to leave 256MB for Python + OS
         env = os.environ.copy()
         env["NODE_OPTIONS"] = "--max-old-space-size=256"
@@ -103,7 +109,7 @@ def _build_node(deploy_id: str, root: str) -> str | None:
             subprocess.run("npm run build", shell=True, check=True, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, env=env)
         except subprocess.CalledProcessError:
             raise RuntimeError("npm run build failed (likely out of memory)")
-        _log(deploy_id, "Build completed")
+        _log(deploy_id, "✅ Build completed")
     else:
         _log(deploy_id, "No build script found, skipping build")
 
